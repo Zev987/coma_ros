@@ -43,13 +43,13 @@ private:
 	state_type init_state;
 
 	//physical parameters of the legs
-	T ro;	// outer radius m
-	T ri;	// inner radius mc
-	T I;	//second moment of area
-	T A;	//area
-	T J;	//polar moment
-	T E;	//Pa Youngs mod
-	T G;	//Pa shear mod
+	double ro;	// outer radius m
+	double ri;	// inner radius mc
+	double I;	//second moment of area
+	double A;	//area
+	double J;	//polar moment
+	double E;	//Pa Youngs mod
+	double G;	//Pa shear mod
 	Eigen::Matrix<T, 3, 3> K_bt_inv;
 	Eigen::Matrix<T, 3, 3> K_se_inv;
 
@@ -73,18 +73,53 @@ template<typename T> void cosserat_rod<T>::set_init_state(Eigen::Matrix<T, 18, 1
 	}
 
 	//ro = T(.0018034 / 2);							// outer radius m
-	ro = T(0.00198 / 2);							// outer radius m
-	ri = T(0.00);									// inner radius mc
-	I = T(0.25 * M_PI * (pow(ro, 4) - pow(ri, 4)));	//second moment of area
-	A = T(M_PI * (pow(ro, 2) - pow(ri, 2)));		//area
-	J = T(2) * I;								//polar moment
-	E = T(207 * 10E9);						//Pa Youngs mod
-	G = T(79.3 * 10E9);						//Pa shear mod
-	K_bt_inv << T(1) / (E * I), T(0), T(0), T(0), T(1) / (E * I), T(0), T(0), T(0), T(1) / (J * G);
-	K_se_inv << T(1) / (G * A), T(0), T(0), T(0), T(1) / (G * A), T(0), T(0), T(0), T(1) / (E * A);
+	ro = 0.00198 / 2;							// outer radius m
+	ri = 0.00;									// inner radius mc
+	I = 0.25 * M_PI * (pow(ro, 4) - pow(ri, 4));	//second moment of area
+	A = M_PI * (pow(ro, 2) - pow(ri, 2));		//area
+	J = 2 * I;								//polar moment
+	//E = T(207 * 10E9);						//Pa Youngs mod
+	//G = T(79.3 * 10E9);						//Pa shear mod
+	E = 207 * 10E8;						//Pa Youngs mod
+	G = 79.3 * 10E8;						//Pa shear mod
+	K_bt_inv << T(1) / T(E * I), T(0), T(0), T(0), T(1) / T(E * I), T(0), T(0), T(0), T(1) / T(J * G);
+	K_se_inv << T(1) / T(G * A), T(0), T(0), T(0), T(1) / T(G * A), T(0), T(0), T(0), T(1) / T(E * A);
 }
 
 template<typename T> void cosserat_rod<T>::deriv(const state_type &x, state_type &dxdt, T t) {
+	//compute kinematic variables from the internal force and moment using the linear constitutive law
+	T v[3];
+	v[0] = x[12]*(x[3]*K_se_inv(0,0) + x[6]*K_se_inv(0,1) + x[9]*K_se_inv(0,2)) + x[13]*(x[4]*K_se_inv(0,0) + x[7]*K_se_inv(0,1) + x[10]*K_se_inv(0,2)) + x[14]*(x[5]*K_se_inv(0,0) + x[8]*K_se_inv(0,1) + x[11]*K_se_inv(0,2));
+	v[1] = x[12]*(x[3]*K_se_inv(1,0) + x[6]*K_se_inv(1,1) + x[9]*K_se_inv(1,2)) + x[13]*(x[4]*K_se_inv(1,0) + x[7]*K_se_inv(1,1) + x[10]*K_se_inv(1,2)) + x[14]*(x[5]*K_se_inv(1,0) + x[8]*K_se_inv(1,1) + x[11]*K_se_inv(1,2));
+	v[2] = x[12]*(x[3]*K_se_inv(2,0) + x[6]*K_se_inv(2,1) + x[9]*K_se_inv(2,2)) + x[13]*(x[4]*K_se_inv(2,0) + x[7]*K_se_inv(2,1) + x[10]*K_se_inv(2,2)) + x[14]*(x[5]*K_se_inv(2,0) + x[8]*K_se_inv(2,1) + x[11]*K_se_inv(2,2)) + T(1);
+	T u[3];
+	u[0] = x[15]*(K_bt_inv(0,0)*x[3] + K_bt_inv(0,1)*x[6] + K_bt_inv(0,2)*x[9]) + x[16]*(K_bt_inv(0,0)*x[4] + K_bt_inv(0,1)*x[7] + K_bt_inv(0,2)*x[10]) + x[17]*(K_bt_inv(0,0)*x[5] + K_bt_inv(0,1)*x[8] + K_bt_inv(0,2)*x[11]);
+	u[1] = x[15]*(K_bt_inv(1,0)*x[3] + K_bt_inv(1,1)*x[6] + K_bt_inv(1,2)*x[9]) + x[16]*(K_bt_inv(1,0)*x[4] + K_bt_inv(1,1)*x[7] + K_bt_inv(1,2)*x[10]) + x[17]*(K_bt_inv(1,0)*x[5] + K_bt_inv(1,1)*x[8] + K_bt_inv(1,2)*x[11]);
+	u[2] = x[15]*(K_bt_inv(2,0)*x[3] + K_bt_inv(2,1)*x[6] + K_bt_inv(2,2)*x[9]) + x[16]*(K_bt_inv(2,0)*x[4] + K_bt_inv(2,1)*x[7] + K_bt_inv(2,2)*x[10]) + x[17]*(K_bt_inv(2,0)*x[5] + K_bt_inv(2,1)*x[8] + K_bt_inv(2,2)*x[11]);
+
+	//compute state variable derivatives from cosserat rod equations
+	dxdt[0] = x[3]*v[0] + x[6]*v[1] + x[9]*v[2];
+	dxdt[1] = x[4]*v[0] + x[7]*v[1] + x[10]*v[2];
+	dxdt[2] = x[5]*v[0] + x[8]*v[1] + x[11]*v[2];
+	dxdt[3] = x[6]*u[2] - x[9]*u[1];
+	dxdt[4] = x[7]*u[2] - x[10]*u[1];
+	dxdt[5] = x[8]*u[2] - x[11]*u[1];
+	dxdt[6] = x[9]*u[0] - x[3]*u[2];
+	dxdt[7] = x[10]*u[0]- x[4]*u[2];
+	dxdt[8] = x[11]*u[0]- x[5]*u[2];
+	dxdt[9] = x[3]*u[1] - x[6]*u[0];
+	dxdt[10] = x[4]*u[1] - x[7]*u[0];
+	dxdt[11] = x[5]*u[1] - x[8]*u[0];
+	dxdt[12] = T(0);
+	dxdt[13] = T(0);
+	dxdt[14] = T(0);
+	dxdt[15] = x[13]*(x[5]*v[0] + x[8]*v[1] + x[11]*v[2]) - x[14]*(x[4]*v[0] + x[7]*v[1] + x[10]*v[2]);
+	dxdt[16] = x[14]*(x[3]*v[0] + x[6]*v[1] + x[9]*v[2]) - x[12]*(x[5]*v[0] + x[8]*v[1] + x[11]*v[2]);
+	dxdt[17] = x[12]*(x[4]*v[0] + x[7]*v[1] + x[10]*v[2]) - x[13]*(x[3]*v[0] + x[6]*v[1] + x[9]*v[2]);
+
+	/*
+	The below performs the same calculations as the code above but using Eigen Matrices. The above was derived for efficiency.
+
 	using Eigen::Matrix;
 	typedef Matrix<T, 3, 3> Matrix3t;
 	typedef Matrix<T, 3, 1> Vector3t;
@@ -132,6 +167,7 @@ template<typename T> void cosserat_rod<T>::deriv(const state_type &x, state_type
 	dxdt[15] = m_dot(0);
 	dxdt[16] = m_dot(1);
 	dxdt[17] = m_dot(2);
+*/
 }
 
 namespace ceres {
